@@ -1,0 +1,55 @@
+name: "Build Sarde Site"
+description: "Install Sarde and build a static site for deployment"
+branding:
+  icon: "file-text"
+  color: "blue"
+
+inputs:
+  path:
+    description: "Path to the Sarde project root (where sarde.yaml lives)"
+    required: false
+    default: "."
+  version:
+    description: "Sarde version to install (e.g. v1.0.0). Defaults to latest."
+    required: false
+    default: "latest"
+  build-args:
+    description: "Additional arguments passed to sarde build"
+    required: false
+    default: ""
+  upload-pages-artifact:
+    description: "Upload dist/ as a GitHub Pages artifact. Set to false for non-Pages deployments."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Sarde
+      shell: bash
+      run: |
+        if [ "${{ inputs.version }}" = "latest" ]; then
+          curl -sSfL https://raw.githubusercontent.com/getsarde/sarde/main/install.sh | sh
+        else
+          VERSION="${{ inputs.version }}"
+          PLATFORM="$(uname -s)_$(uname -m)"
+          ARCHIVE="sarde_${PLATFORM}.tar.gz"
+          URL="https://github.com/getsarde/sarde/releases/download/${VERSION}/${ARCHIVE}"
+          TMPDIR=$(mktemp -d)
+          curl -sSfL -o "${TMPDIR}/${ARCHIVE}" "$URL"
+          tar xzf "${TMPDIR}/${ARCHIVE}" -C /usr/local/bin sarde
+          chmod +x /usr/local/bin/sarde
+          rm -rf "$TMPDIR"
+        fi
+        echo "Installed $(sarde version)"
+
+    - name: Build site
+      shell: bash
+      working-directory: ${{ inputs.path }}
+      run: sarde build ${{ inputs.build-args }}
+
+    - name: Upload Pages artifact
+      if: inputs.upload-pages-artifact == 'true'
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: ${{ inputs.path }}/dist
